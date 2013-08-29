@@ -206,7 +206,6 @@ int main(int argc, char *argv[])
 	u1* buf;
 	u1* buffer_pos;
 	u1* str=NULL;
-	u1 size[1]; // XXX this will break if size is > u1... because size is uleb128
 
 	method_id_struct method_id_item;
 	method_id_struct* method_id_list;
@@ -358,10 +357,15 @@ int main(int argc, char *argv[])
 		if (*class_def_item.source_file_idx != 0xffffffff) {
 			offset2=*string_id_list[*class_def_item.source_file_idx].string_data_off;
 			fseek(input, offset2, SEEK_SET);
-			fread(size, 1, sizeof(size), input);
-			str = malloc(size[0] * sizeof(u1)+1);
-			fread(str, 1, size[0], input);
-			str[size[0]]='\0';
+			buf = malloc(10 * sizeof(u1));
+			fread(buf, 1, sizeof(buf), input);
+			size_uleb_value = uleb128_value(buf);
+			size_uleb=len_uleb128(size_uleb_value);
+			str = malloc(size_uleb_value * sizeof(u1)+1);
+			fseek(input, offset2+size_uleb, SEEK_SET);
+			fread(str, 1, size_uleb_value, input);
+			str[size_uleb_value]='\0';
+
 			printf ("(%s): ", str);
 			free(str);
 			str=NULL;
@@ -375,10 +379,14 @@ int main(int argc, char *argv[])
 			/* print type id */
 			offset2=*string_id_list[*type_id_list[*class_def_item.class_idx].descriptor_idx].string_data_off;
 			fseek(input, offset2, SEEK_SET);
-			fread(size, 1, sizeof(size), input);
-			str = malloc(size[0] * sizeof(u1)+1);
-			fread(str, 1, size[0], input);
-			str[size[0]]='\0';
+			buf = malloc(10 * sizeof(u1));
+			fread(buf, 1, sizeof(buf), input);
+			size_uleb_value = uleb128_value(buf);
+			size_uleb=len_uleb128(size_uleb_value);
+			str = malloc(size_uleb_value * sizeof(u1)+1);
+			fseek(input, offset2+size_uleb, SEEK_SET);
+			fread(str, 1, size_uleb_value, input);
+			str[size_uleb_value]='\0';
 			printf ("\ttype_descriptor: %s\n", str);
 			free(str);
 			str=NULL;
