@@ -519,10 +519,17 @@ int main(int argc, char *argv[])
 			/* print method name */
 			offset2=*string_id_list[name_idx].string_data_off;
 			fseek(input, offset2, SEEK_SET);
-			fread(size, 1, sizeof(size), input);
-			str = malloc(size[0] * sizeof(u1)+1);
-			fread(str, 1, size[0], input);
-			str[size[0]]='\0';
+
+			buf = malloc(10 * sizeof(u1));
+			fread(buf, 1, sizeof(buf), input);
+			size_uleb_value = uleb128_value(buf);
+			size_uleb=len_uleb128(size_uleb_value);
+			str = malloc(size_uleb_value * sizeof(u1)+1);
+			// offset2: on esta el tamany (size_uleb_value) en uleb32 de la string, seguit de la string
+			fseek(input, offset2+size_uleb, SEEK_SET);
+			fread(str, 1, size_uleb_value, input);
+			str[size_uleb_value]='\0';
+
 			printf ("\tvirtual method %d = %s\n",i+1, str);
 			free(str);
 			str=NULL;
