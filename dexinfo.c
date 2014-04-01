@@ -92,6 +92,54 @@ typedef struct {
 	u4 descriptor_idx[1];
 } type_id_struct;
 
+typedef struct {
+	u4 descriptor_idx[1];
+} proto_id_struct;
+
+/*names for the access flags*/
+const char * ACCESS_FLAG_NAMES[20] = {
+    "public",       
+    "private",
+    "protected",
+    "static",       
+    "final",      
+    "synchronized",
+    "super",  
+    "volatile",
+    "bridge",   
+    "transient",
+    "varargs",
+    "native",
+    "interface",
+    "abstract",
+    "strict",
+    "synthetic",
+    "annotation",
+    "enum",    
+    "constructor",
+    "declared_synchronized"};
+/*values for the access flags, this and the preceeding list are used as a lookup dictionary*/
+const u4 ACCESS_FLAG_VALUES[20] = {
+    0x00000001,
+    0x00000002,
+    0x00000004,
+    0x00000008,
+    0x00000010,
+    0x00000020,
+    0x00000020,
+    0x00000040,
+    0x00000040,
+    0x00000080,
+    0x00000080,
+    0x00000100,
+    0x00000200,
+    0x00000400,
+    0x00000800,
+    0x00001000,
+    0x00002000,
+    0x00004000,
+    0x00010000,
+    0x00020000};
 int readUnsignedLeb128(u1** pStream)
 {
 /* taken from dalvik's libdex/Leb128.h */
@@ -169,14 +217,135 @@ size_t len_uleb128(unsigned long n)
     while (b[i++] & 0x80);
     return i;
 }
+/*wrote this to avoid dumping the leb128 parsing and grabbing code all over the place ;)*/
+void 
+printUnsignedLebValue(char *format,
+							u1 *stringData,
+							size_t offset,
+							FILE* DexFile){
 
+	u1 *uLebBuff;
+	int uLebValue, uLebValueLength;
+
+	fseek(DexFile,offset,SEEK_SET); /*move position to the string in data section*/
+	uLebBuff = malloc(10*sizeof(u1))	;
+	fread(uLebBuff,1,sizeof(uLebBuff),DexFile);
+
+	uLebValue = uleb128_value(uLebBuff);	
+	uLebValueLength = len_uleb128(uLebValue);
+	stringData = malloc(uLebValue * sizeof(u1)+1);
+	
+	fseek(DexFile, offset+uLebValueLength ,SEEK_SET);
+	fread(stringData,1,uLebValue,DexFile);
+
+	stringData[uLebValue]='\0';	
+	printf(format,stringData);
+	free(uLebBuff);
+}
+/*this allows us to print ACC_FLAGS symbolically*/
+void parseAccessFlags(u4 flags){
+	int i = 0;
+	if (flags){
+		for (;i<20;i++){
+			if (flags & ACCESS_FLAG_VALUES[i]){
+					printf(" %s ",ACCESS_FLAG_NAMES[i]);	
+			}
+		}	
+	}
+	printf("\n");
+}
+/*not entirely sure how I should use these methods, as is they are only usefull for printing values, and don't return them :/
+though as a tradeoff I've made the methods manipulate the string data in place, so the conversion to returning them would be easy */
+/*Generic methods for printing types*/
+void
+printStringValue(string_id_struct *strIdList,
+				u4 offset_pointer,
+				FILE* DexFile,
+				u1* stringData,
+				char* format){
+
+	size_t strIdOff;
+	if (offset_pointer){
+		strIdOff = *strIdList[offset_pointer].string_data_off; /*get the offset to the string in the data section*/
+		/*would be cool if we have a RAW mode, with only hex unparsed data, and a SYMBOLIC mode where all the data is parsed and interpreted */
+		printUnsignedLebValue(format,stringData,strIdOff,DexFile);
+	}
+	else{
+		printf("none\n");		
+	}
+	free(stringData);
+	stringData=NULL;
+
+}
+
+void
+printTypeDesc(string_id_struct *strIdList,
+				type_id_struct* typeIdList,
+				u4 offset_pointer,
+				FILE* DexFile,
+				u1* stringData,
+				char* format){
+
+	size_t strIdOff;
+	if (offset_pointer){
+		strIdOff = *strIdList[*typeIdList[offset_pointer].descriptor_idx].string_data_off; /*get the offset to the string in the data section*/
+		/*would be cool if we have a RAW mode, with only hex unparsed data, and a SYMBOLIC mode where all the data is parsed and interpreted */
+		printUnsignedLebValue(format,stringData,strIdOff,DexFile);
+	}
+	else{
+		printf("none\n");
+	}
+	free(stringData);
+	stringData=NULL;
+
+}
+void 
+printClassFileName(string_id_struct *strIdList, 
+				class_def_struct classDefItem,
+				FILE *DexFile,
+				u1* stringData){
+
+	size_t strIdOff;
+	if (classDefItem.source_file_idx){
+		strIdOff = *strIdList[*classDefItem.source_file_idx].string_data_off; /*get the offset to the string in the data section*/
+		printUnsignedLebValue("(%s)\n",stringData,strIdOff,DexFile);
+	}
+	else{
+		printf("none\n");
+	}
+	free(stringData);
+	stringData=NULL;
+	
+}
+void
+printTypeDescForClass(string_id_struct *strIdList, 
+				type_id_struct* typeIdList,
+				class_def_struct classDefItem,
+				FILE *DexFile,
+				u1* stringData){
+	size_t strIdOff;
+	if (classDefItem.class_idx){
+	strIdOff = *strIdList[*typeIdList[*classDefItem.class_idx].descriptor_idx].string_data_off; /*get the offset to the string in the data section*/
+	printUnsignedLebValue("%s\n",stringData,strIdOff,DexFile);
+	free(stringData);
+	stringData=NULL;
+	}
+	else{
+		printf("none\n");
+	}
+}
+void parseClass(){
+
+}
+void parseHeader(){
+
+}
 void help_show_message()
 {
 	fprintf(stderr, "Usage: dexinfo <file.dex> [options]\n");
 	fprintf(stderr, " options:\n");
 	fprintf(stderr, "    -V             print verbose information\n");
 }
-
 int main(int argc, char *argv[])
 {
 	char *dexfile;
@@ -342,60 +511,33 @@ int main(int argc, char *argv[])
 		printf ("method_id_list[%d]name=%x\n\n", i/8, *method_id_list[i/8].name_idx);
 	}
 #endif
-
-	for (c=1; c <= (int)*header.class_defs_size; c++) {
-
+	/*Parse class definitions*/
+	for (c=1; c <= (int)*header.class_defs_size; c++) { /*run through all the class */
 		// change the position to the class_def_struct of each class
-		offset = *header.class_defs_off + ((c-1)*sizeof(class_def_item));
+		offset = *header.class_defs_off + ((c-1)*sizeof(class_def_item)); /*get the offset for this class definition*/
 		fseek(input, offset, SEEK_SET);
-
 		printf("[] Class %d ", c);
-
-		fread(&class_def_item, 1, sizeof(class_def_item), input);
-
+		fread(&class_def_item, 1, sizeof(class_def_item), input); /*read the class definition from the input*/
 		/* print class filename */
 		if (*class_def_item.source_file_idx != 0xffffffff) {
-			offset2=*string_id_list[*class_def_item.source_file_idx].string_data_off;
-			fseek(input, offset2, SEEK_SET);
-			buf = malloc(10 * sizeof(u1));
-			fread(buf, 1, sizeof(buf), input);
-			size_uleb_value = uleb128_value(buf);
-			size_uleb=len_uleb128(size_uleb_value);
-			str = malloc(size_uleb_value * sizeof(u1)+1);
-			fseek(input, offset2+size_uleb, SEEK_SET);
-			fread(str, 1, size_uleb_value, input);
-			str[size_uleb_value]='\0';
-
-			printf ("(%s): ", str);
-			free(str);
-			str=NULL;
+			printClassFileName(string_id_list,class_def_item,input,str);
 		} else {
 			printf ("(No index): ");
 		}
 
 		if (DEBUG) {
 			printf("\n");
-
 			/* print type id */
-			offset2=*string_id_list[*type_id_list[*class_def_item.class_idx].descriptor_idx].string_data_off;
-			fseek(input, offset2, SEEK_SET);
-			buf = malloc(10 * sizeof(u1));
-			fread(buf, 1, sizeof(buf), input);
-			size_uleb_value = uleb128_value(buf);
-			size_uleb=len_uleb128(size_uleb_value);
-			str = malloc(size_uleb_value * sizeof(u1)+1);
-			fseek(input, offset2+size_uleb, SEEK_SET);
-			fread(str, 1, size_uleb_value, input);
-			str[size_uleb_value]='\0';
-			printf ("\ttype_descriptor: %s\n", str);
-			free(str);
-			str=NULL;
-
-			printf("\tclass_idx=0x%x\n", *class_def_item.class_idx);
-			printf("\taccess_flags=0x%x\n", *class_def_item.access_flags);
-			printf("\tsuperclass_idx=0x%x\n", *class_def_item.superclass_idx);
-			printf("\tinterfaces_off=0x%x\n", *class_def_item.interfaces_off);
-			printf("\tsource_file_idx=0x%x\n", *class_def_item.source_file_idx);
+			printf("\tclass_idx='0x%x':", *class_def_item.class_idx);
+			printTypeDescForClass(string_id_list,type_id_list,class_def_item,input,str);
+			printf("\taccess_flags='0x%x':", *class_def_item.access_flags); /*need to interpret this*/
+			parseAccessFlags(*class_def_item.access_flags);
+			printf("\tsuperclass_idx='0x%x':", *class_def_item.superclass_idx);
+			printTypeDesc(string_id_list,type_id_list,*class_def_item.superclass_idx,input,str,"%s\n");
+			printf("\tinterfaces_off='0x%x'\n", *class_def_item.interfaces_off); /*need to look this up in the DexTypeList*/
+			printf("\tsource_file_idx='0x%x'\n", *class_def_item.source_file_idx);
+			//printStringValue(string_id_list,*class_def_item.source_file_idx,input,str,"%s\n"); causes a seg fault on some dex files
+		/*should implement decoding the annotations directory items, we can use this to idenfiy Javascript interface accessible methods*/
 			printf("\tannotations_off=0x%x\n", *class_def_item.annotations_off);
 			printf("\tclass_data_off=0x%x (%d)\n", *class_def_item.class_data_off, *class_def_item.class_data_off);
 			printf("\tstatic_values_off=0x%x (%d)\n", *class_def_item.static_values_off, *class_def_item.static_values_off);
@@ -448,8 +590,10 @@ int main(int argc, char *argv[])
 			field_idx_diff = readUnsignedLeb128(&buffer);
 			field_access_flags = readUnsignedLeb128(&buffer);
 			if (DEBUG) {
-				printf ("\t\t field_idx_diff=0x%x\n", field_idx_diff);
-				printf ("\t\t field_access_flags=0x%x\n", field_access_flags);
+				printf ("\t\t[%d]|--field_idx_diff='0x%x'\n",i, field_idx_diff);
+				//printTypeDesc(string_id_list,type_id_list,field_idx_diff,input,str," %s\n");
+				printf ("\t\t    |--field_access_flags='0x%x'",field_access_flags);
+				parseAccessFlags(field_access_flags);
 			}
 		}
 
@@ -459,8 +603,10 @@ int main(int argc, char *argv[])
 			field_idx_diff = readUnsignedLeb128(&buffer);
 			field_access_flags = readUnsignedLeb128(&buffer);
 			if (DEBUG) {
-				printf ("\t\t field_idx_diff=0x%x\n", field_idx_diff);
-				printf ("\t\t field_access_flags=0x%x\n", field_access_flags);
+				printf ("\t\t[%d]|--field_idx_diff='0x%x'\n", i,field_idx_diff);
+				//printTypeDesc(string_id_list,type_id_list,field_idx_diff,input,str,"%s\n");
+				printf ("\t\t    |--field_access_flags='0x%x' :",field_access_flags);
+				parseAccessFlags(field_access_flags);
 			}
 		}
 
@@ -483,7 +629,7 @@ int main(int argc, char *argv[])
 			u2 proto_idx=*method_id_list[key].proto_idx;
 			u4 name_idx=*method_id_list[key].name_idx;
 
-			/* print method name */
+			/* print method name ... should really do this stuff through a common function, its going to be annoying to debug this...:/ */
 			offset2=*string_id_list[name_idx].string_data_off;
 			fseek(input, offset2, SEEK_SET);
 
@@ -502,8 +648,10 @@ int main(int argc, char *argv[])
 			str=NULL;
 			if (DEBUG) {
 				printf("\t\tmethod_code_off=0x%x\n", method_code_off);
-				printf("\t\tmethod_access_flags=0x%x\n", method_access_flags);
-				printf("\t\tclass_idx=0x%x\n", class_idx);
+				printf("\t\tmethod_access_flags='0x%x'\n", method_access_flags);
+				//parseAccessFlags(method_access_flags);	
+				printf("\t\tclass_idx='0x%x'\n", class_idx);
+				//printTypeDesc(string_id_list,type_id_list,class_idx,input,str," %s\n");
 				printf("\t\tproto_idx=0x%x\n", proto_idx);
 			}
 		}
@@ -526,6 +674,7 @@ int main(int argc, char *argv[])
 			
 			/* print method name */
 			offset2=*string_id_list[name_idx].string_data_off;
+			//printStringValue(string_id_list,name_idx,input,str,"%s\n");
 			fseek(input, offset2, SEEK_SET);
 
 			buf = malloc(10 * sizeof(u1));
@@ -533,7 +682,7 @@ int main(int argc, char *argv[])
 			size_uleb_value = uleb128_value(buf);
 			size_uleb=len_uleb128(size_uleb_value);
 			str = malloc(size_uleb_value * sizeof(u1)+1);
-			// offset2: on esta el tamany (size_uleb_value) en uleb32 de la string, seguit de la string
+			// offset2: on esta el tamany (size_uleb_value) en uleb32 de la string, seguit de la string 
 			fseek(input, offset2+size_uleb, SEEK_SET);
 			fread(str, 1, size_uleb_value, input);
 			str[size_uleb_value]='\0';
@@ -543,7 +692,8 @@ int main(int argc, char *argv[])
 			str=NULL;
 			if (DEBUG) {
 				printf("\t\tmethod_code_off=0x%x\n", method_code_off);
-				printf("\t\tmethod_access_flags=0x%x\n", method_access_flags);
+				printf("\t\tmethod_access_flags='0x%x'\n", method_access_flags);
+				//parseAccessFlags(method_access_flags);	
 				printf("\t\tclass_idx=0x%x\n", class_idx);
 				printf("\t\tproto_idx=0x%x\n", proto_idx);
 			}
