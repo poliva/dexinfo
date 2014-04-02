@@ -1,6 +1,7 @@
 /*
  * dexinfo - a very rudimentary dex file parser
  *
+ * Copyright (C) 2014 Keith Makan (@k3170Makan)
  * Copyright (C) 2012-2013 Pau Oliva Fora (@pof)
  * Copyright (C) 2008 The Android Open Source Project
  *
