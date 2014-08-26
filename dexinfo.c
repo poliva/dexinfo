@@ -35,6 +35,7 @@ typedef int16_t             s2;
 typedef int32_t             s4;
 typedef int64_t             s8;
 
+
 typedef struct {
 	char dex[3];
 	char newline[1];
@@ -141,6 +142,9 @@ const u4 ACCESS_FLAG_VALUES[20] = {
     0x00004000,
     0x00010000,
     0x00020000};
+
+const u4 NO_INDEX = 0xffffffff; 
+
 int readUnsignedLeb128(u1** pStream)
 {
 /* taken from dalvik's libdex/Leb128.h */
@@ -537,7 +541,10 @@ int main(int argc, char *argv[])
 			printTypeDesc(string_id_list,type_id_list,*class_def_item.superclass_idx,input,str,"%s\n");
 			printf("\tinterfaces_off='0x%x'\n", *class_def_item.interfaces_off); /*need to look this up in the DexTypeList*/
 			printf("\tsource_file_idx='0x%x'\n", *class_def_item.source_file_idx);
-			//printStringValue(string_id_list,*class_def_item.source_file_idx,input,str,"%s\n"); causes a seg fault on some dex files
+            if (*class_def_item.source_file_idx != NO_INDEX) 
+			printStringValue(string_id_list,*class_def_item.source_file_idx,input,str,"%s\n"); //causes a seg fault on some dex files
+            // The seg fault was because there was no index value on the
+            // class_def_item.scource_fie_idx
 		/*should implement decoding the annotations directory items, we can use this to idenfiy Javascript interface accessible methods*/
 			printf("\tannotations_off=0x%x\n", *class_def_item.annotations_off);
 			printf("\tclass_data_off=0x%x (%d)\n", *class_def_item.class_data_off, *class_def_item.class_data_off);
